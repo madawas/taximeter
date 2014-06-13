@@ -1,29 +1,38 @@
+//libraries
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
 #include <Wire.h>
 #include <Time.h>
 #include <DS1307RTC.h>
 
-#define OPTION A1
+//pin definition
+#define RESET A1
 #define START 10
 #define END 11
 #define REPORT 12
-#define SERVICE 13
-#define HALL 2
+#define ODOMETER 13
+#define SPEED_SENSOR 2
 #define LCDPOWER A2
+
+//constants
+#define STARTING_FARE 50
+#define FARE 40
+#define FARE_NIGHT 50 
 
 LiquidCrystal lcd(9, 8, 7, 6, 5, 4);
 
-short pulseCounter;
-unsigned short meters;
+//variable definition
+short pulseCounter; //pulses from the hall sensor for a second
 unsigned int vehicleSpeed;
+
+unsigned short meters;
 float totalKm;
 float hireTotalKm;
-long income;
 float hireDistance;
-unsigned int startingFare;
+
+long income;
 unsigned int fare;
-int dailyRun;
+
 long time1;
 long time2;
 int waitingTime;
@@ -46,12 +55,12 @@ void setup() {
   lcd.begin(16, 2);
   lcd.clear();
   
-  pinMode(HALL, INPUT);
-  pinMode(OPTION, INPUT);
+  pinMode(SPEED_SENSOR, INPUT);
+  pinMode(RESET, INPUT);
   pinMode(START, INPUT);
   pinMode(END, INPUT);
   pinMode(REPORT, INPUT);
-  pinMode(SERVICE, INPUT);
+  pinMode(ODOMETER, INPUT);
   pinMode(LCDPOWER, OUTPUT);
   
   attachInterrupt(0, calc, RISING);
@@ -59,8 +68,7 @@ void setup() {
   pulseCounter = 0;
   meters = 0;
   hireDistance = 0;
-  startingFare = 50;
-  fare = startingFare;
+  fare = STARTING_FARE;
   vehicleSpeed = 0;
   onHire = false;
   waiting = false;
@@ -73,7 +81,7 @@ void setup() {
 void boot(){  
   digitalWrite(LCDPOWER, HIGH);
   
-  lcd.setCursor(5, 0);
+  lcd.setCursor(4, 0);
   lcd.print("WELCOME!!");
   
   delay(3000);
@@ -102,7 +110,7 @@ void boot(){
 void shutDown(){
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Shutting down....");
+  lcd.print("Shutting down...");
   saveData(0,totalKm);
   saveData(1,hireTotalKm);
   saveData(3,income);
@@ -144,17 +152,17 @@ void loop() {
     totalKm += 0.1;
     if(onHire){
       hireDistance += 0.1;
-      hireTotalKm+=0.1;
+      hireTotalKm += 0.1;
     }
     if(hireDistance > 1){
       RTC.read(tm);
       if(tm.Hour > 21 && tm.Hour < 5){
-        fare += 5;
-        income += 5;
+        fare += FARE_NIGHT/10;
+        income += FARE_NIGHT/10;
       }
       else{
-        fare += 4;
-        income += 4;
+        fare += FARE/10;
+        income += FARE/10;
       }
     }
   }
@@ -183,13 +191,13 @@ void loop() {
   }
   
   if(!onHire){
-    if (digitalRead(OPTION) == LOW)
+    if (digitalRead(RESET) == LOW)
       readCommand();
     else if(digitalRead(START) == LOW)
       startButton();
     else if(digitalRead(REPORT) == LOW)
       reportButton();
-    else if(digitalRead(SERVICE) == LOW)
+    else if(digitalRead(ODOMETER) == LOW)
       serviceButton();
   }
   if(digitalRead(END) == LOW)
@@ -236,7 +244,7 @@ bool isLongPress(int pin){
 void startButton(){
     Serial.println("Hire started");
     hireDistance = 0;
-    fare = startingFare;
+    fare = STARTING_FARE;
     onHire = true;
     income += 50;
 }
@@ -276,7 +284,7 @@ void reportButton(){
 
 void serviceButton(){
   delay(50);
-  if(!isLongPress(SERVICE)){
+  if(!isLongPress(ODOMETER)){
     Serial.println("Total distance");
     showTotDist();
   }
@@ -295,7 +303,7 @@ void showDailyRpt(){
   lcd.setCursor(0, 1);
   lcd.print(hireTotalKm-readFloat(5));
   lcd.print(" km");
-  while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
+  while(digitalRead(RESET) == HIGH && millis() - showReportDelay < 5000);
   delay(600);
   lcd.clear();
 }
@@ -309,7 +317,7 @@ void showMonthlyRpt(){
   lcd.setCursor(0, 1);
   lcd.print(hireTotalKm-readFloat(7));
   lcd.print(" km");
-  while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
+  while(digitalRead(RESET) == HIGH && millis() - showReportDelay < 5000);
   delay(600);
   lcd.clear();
 }
@@ -322,7 +330,7 @@ void showTotDist(){
   lcd.setCursor(0, 1);
   lcd.print(totalKm);
   lcd.print(" km");
-  while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
+  while(digitalRead(RESET) == HIGH && millis() - showReportDelay < 5000);
   delay(600);
   lcd.clear();
 }
@@ -372,8 +380,7 @@ float readFloat(int addr){
 }
 
 void showTime(){
-  tmElements_t tm;
-  int refresh;
+  
   long showReportDelay = millis();
   lcd.clear();
   if (RTC.read(tm)) {
@@ -384,7 +391,7 @@ void showTime(){
     lcd.print("/");
     lcd.print(tmYearToCalendar(tm.Year));
     
-    while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000){
+    while(digitalRead(RESET) == HIGH && millis() - showReportDelay < 5000){
       lcd.setCursor(0, 0);
       RTC.read(tm);
       if (tm.Hour >= 0 && tm.Hour < 10)
@@ -408,6 +415,6 @@ void showTime(){
       lcd.print("Clock error!");
       lcd.setCursor(0, 1);
       lcd.print("Service meter");
-      while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
+      while(digitalRead(RESET) == HIGH && millis() - showReportDelay < 5000);
   }
 }
