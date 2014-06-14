@@ -7,14 +7,14 @@
 
 //pin definition
 #define RESET A1
-#define START 13
-#define END 12
-#define REPORT 11
 #define ODOMETER 10
+#define REPORT 11
+#define END 12
+#define START 13
 #define SPEED_SENSOR 2
 #define LCDPOWER A2
 
-//constants
+//constants - can be changed
 #define STARTING_FARE 50
 #define FARE 40
 #define FARE_NIGHT 50
@@ -68,6 +68,7 @@ bool working;
 int inputWait;
 int longPress;
 
+
 //Setup
 void setup() {
   Serial.begin(9600);
@@ -83,7 +84,7 @@ void setup() {
   pinMode(ODOMETER, INPUT);
   pinMode(LCDPOWER, OUTPUT);
   
-  attachInterrupt(0, calc, RISING);
+  attachInterrupt(0, pulseCalculator, RISING);
   
   pulseCounter = 0;
   meters = 0;
@@ -96,6 +97,12 @@ void setup() {
   working = false;
   waitingTime = 0;
   menuShowTime = 0;
+}
+
+//ISR 0
+void pulseCalculator(){
+  ++pulseCounter;
+  ++meters;
 }
 
 void boot(){  
@@ -131,13 +138,197 @@ void shutDown(){
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Shutting down...");
+  
   saveData(0, totalKm);
   saveData(1, hireTotalKm);
   saveData(3, income);
+  
   delay(3000);
   digitalWrite(LCDPOWER, LOW);
   lcd.clear();
+  
   working = false;
+}
+
+void startButton(){
+    hireDistance = 0;
+    fare = STARTING_FARE;
+    onHire = true;
+    income += 50;
+}
+
+void endButton(){
+  delay(50);
+  if(!isLongPress(END)){
+    if(onHire){
+      onHire = false;
+      saveData(1, hireTotalKm);
+      saveData(3, income);
+    }
+  }
+  else{
+    if(onHire){
+      onHire = false;
+      saveData(1, hireTotalKm);
+      saveData(3, income);
+    }
+    shutDown();
+  }
+}
+
+void reset(){
+  commandSent = false;
+  inputWait = 3000; //wait for 3 seconds
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Press button");
+  lcd.setCursor(0, 1);
+  lcd.print("to reset");
+  
+  while(!commandSent){
+    if((digitalRead(START) == LOW) && onHire){
+      resetHire();
+    }
+    
+    if(!commandSent){
+      --inputWait;
+    }
+    
+    if(inputWait <= 0){
+      commandSent = true;
+    }
+    lcd.clear();
+  }
+}
+
+void resetHire(){
+  menuShowTime = millis();
+  
+    long day_LR,month_LR,year1_LR, year2_LR, hour_LR, minute_LR;
+    onHire = false;
+    if(RTC.read(tm)){
+      day_LR = tm.Day;
+      month_LR = tm.Month;
+      year1_LR = tmYearToCalendar(tm.Year);
+      hour_LR = tm.Hour;
+      minute_LR = tm.Minute;
+      
+      year2_LR = year1_LR % 100;
+      year1_LR /= 100; 
+    
+      saveData(10, day_LR);
+      saveData(11, month_LR);
+      saveData(12, year1_LR);
+      saveData(13, year2_LR);
+      saveData(14, hour_LR);
+      saveData(15, minute_LR);
+    }
+        
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Hire Reset");
+    lcd.setCursor(0, 1);
+    lcd.print("Complete");
+    while((millis() - menuShowTime) < 3000);
+}
+
+void showLastResetTime(){
+  menuShowTime = millis();
+  long day_LR,month_LR,year1_LR, year2_LR, hour_LR, minute_LR;
+  
+  day_LR = readLong(10);
+  month_LR = readLong(11);
+  year1_LR = readLong(12);
+  year2_LR = readLong(13);
+  hour_LR = readLong(14);
+  minute_LR = readLong(15);
+  
+  lcd.clear();
+  
+  lcd.setCursor(0, 0);
+  lcd.print(hour_LR);
+  lcd.print(":");
+  lcd.print(minute_LR);
+  
+  lcd.setCursor(0, 1);
+  lcd.print(day_LR);
+  lcd.print("-");
+  lcd.print(month_LR);
+  lcd.print("-");
+  lcd.print(year1_LR);
+  lcd.print(year2_LR);
+  while((millis() - menuShowTime) < 5000);
+}
+
+void reportButton(){
+  delay(50);
+  if(!isLongPress(REPORT)){
+    showDailyReport();
+  }
+  else{
+    showMonthlyReport();
+  }
+}
+
+void serviceButton(){
+  delay(50);
+  if(!isLongPress(ODOMETER)){
+    showTotalDistance();
+  }
+  else{
+    clearDistance();
+  }
+}
+
+void showDailyReport(){
+  menuShowTime = millis();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(income-readLong(4));
+  lcd.print(" LKR");
+  lcd.setCursor(0, 1);
+  lcd.print(hireTotalKm-readFloat(5));
+  lcd.print(" km");
+  while(digitalRead(RESET) == HIGH && millis() - menuShowTime < 5000);
+  delay(600);
+  lcd.clear();
+}
+
+void showMonthlyReport(){
+  menuShowTime = millis();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(income-readLong(6));
+  lcd.print(" LKR");
+  lcd.setCursor(0, 1);
+  lcd.print(hireTotalKm-readFloat(7));
+  lcd.print(" km");
+  while(digitalRead(RESET) == HIGH && millis() - menuShowTime < 5000);
+  delay(600);
+  lcd.clear();
+}
+
+void showTotalDistance(){
+  menuShowTime = millis();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Total distance");
+  lcd.setCursor(0, 1);
+  lcd.print(totalKm);
+  lcd.print(" km");
+  while(digitalRead(RESET) == HIGH && millis() - menuShowTime < 5000);
+  delay(600);
+  lcd.clear();
+}
+
+void clearDistance(){
+  saveData(2,totalKm);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Reset Suceeded!");
+  delay(2000);
+  lcd.clear();
 }
 
 void loop() {
@@ -274,38 +465,6 @@ void loop() {
     endButton();
 }
 
-//ISR 0
-void calc(){
-  ++pulseCounter;
-  ++meters;
-}
-
-void reset(){
-  commandSent = false;
-  inputWait = 3000;
-  
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Press button");
-  lcd.setCursor(0, 1);
-  lcd.print("to reset");
-  
-  while(!commandSent){
-    if((digitalRead(START) == LOW) && onHire){
-      resetHire();
-    }
-    
-    if(!commandSent){
-      --inputWait;
-    }
-    
-    if(inputWait <= 0){
-      commandSent = true;
-    }
-    lcd.clear();
-  }
-}
-
 bool isLongPress(int pin){
   longPress = 300;
   while(digitalRead(pin) == LOW){
@@ -318,161 +477,6 @@ bool isLongPress(int pin){
     return false;
   else
     return true;
-}
-
-void startButton(){
-    hireDistance = 0;
-    fare = STARTING_FARE;
-    onHire = true;
-    income += 50;
-}
-
-void endButton(){
-  delay(50);
-  if(!isLongPress(END)){
-    if(onHire){
-      onHire = false;
-      saveData(1, hireTotalKm);
-      saveData(3, income);
-    }
-  }
-  else{
-    if(onHire){
-      onHire = false;
-      saveData(1, hireTotalKm);
-      saveData(3, income);
-    }
-    shutDown();
-  }
-}
-
-void resetHire(){
-  menuShowTime = millis();
-  
-    long day_LR,month_LR,year1_LR, year2_LR, hour_LR, minute_LR;
-    onHire = false;
-    if(RTC.read(tm)){
-      day_LR = tm.Day;
-      month_LR = tm.Month;
-      year1_LR = tm.Year;
-      hour_LR = tm.Hour;
-      minute_LR = tm.Minute;
-      
-      year2_LR = year1_LR % 100;
-      year1_LR /= 100; 
-    
-      saveData(10, day_LR);
-      saveData(11, month_LR);
-      saveData(12, year1_LR);
-      saveData(13, year2_LR);
-      saveData(14, hour_LR);
-      saveData(15, minute_LR);
-    }
-        
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Hire Reset");
-    lcd.setCursor(0, 1);
-    lcd.print("Complete");
-    while((millis() - menuShowTime) < 3000);
-}
-
-void showLastResetTime(){
-  menuShowTime = millis();
-  long day_LR,month_LR,year1_LR, year2_LR, hour_LR, minute_LR;
-  
-  day_LR = readLong(10);
-  month_LR = readLong(11);
-  year1_LR = readLong(12);
-  year2_LR = readLong(13);
-  hour_LR = readLong(14);
-  minute_LR = readLong(15);
-  
-  lcd.clear();
-  
-  lcd.setCursor(0, 0);
-  lcd.print(hour_LR);
-  lcd.print(":");
-  lcd.print(minute_LR);
-  
-  lcd.setCursor(0, 1);
-  lcd.print(day_LR);
-  lcd.print("-");
-  lcd.print(month_LR);
-  lcd.print("-");
-  lcd.print(year1_LR);
-  lcd.print(year2_LR);
-  while((millis() - menuShowTime) < 5000);
-}
-
-void reportButton(){
-  delay(50);
-  if(!isLongPress(REPORT)){
-    showDailyReport();
-  }
-  else{
-    showMonthlyReport();
-  }
-}
-
-void serviceButton(){
-  delay(50);
-  if(!isLongPress(ODOMETER)){
-    showTotDist();
-  }
-  else{
-    clearDistance();
-  }
-}
-
-void showDailyReport(){
-  menuShowTime = millis();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(income-readLong(4));
-  lcd.print(" LKR");
-  lcd.setCursor(0, 1);
-  lcd.print(hireTotalKm-readFloat(5));
-  lcd.print(" km");
-  while(digitalRead(RESET) == HIGH && millis() - menuShowTime < 5000);
-  delay(600);
-  lcd.clear();
-}
-
-void showMonthlyReport(){
-  menuShowTime = millis();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(income-readLong(6));
-  lcd.print(" LKR");
-  lcd.setCursor(0, 1);
-  lcd.print(hireTotalKm-readFloat(7));
-  lcd.print(" km");
-  while(digitalRead(RESET) == HIGH && millis() - menuShowTime < 5000);
-  delay(600);
-  lcd.clear();
-}
-
-void showTotDist(){
-  menuShowTime = millis();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Total distance");
-  lcd.setCursor(0, 1);
-  lcd.print(totalKm);
-  lcd.print(" km");
-  while(digitalRead(RESET) == HIGH && millis() - menuShowTime < 5000);
-  delay(600);
-  lcd.clear();
-}
-
-void clearDistance(){
-  saveData(2,totalKm);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Reset Suceeded!");
-  delay(2000);
-  lcd.clear();
 }
 
 void saveData(int addr, float data){
