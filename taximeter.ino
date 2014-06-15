@@ -17,8 +17,9 @@
 //constants - can be changed
 #define STARTING_FARE 50
 #define FARE 40
-#define FARE_NIGHT 50
+#define FARE_NIGHT 50 //fare for 1 km between 22 00 h and 05 00 h
 #define WAITING_FARE 10 //fare addition for 5 minute wait
+#define TYRE_SIZE 2.55 //standard tyre sizein meters
 
 /*
  addr 0  : Total distance
@@ -42,7 +43,7 @@ LiquidCrystal lcd(9, 8, 7, 6, 5, 4);
 
 //variable definition
 short pulseCounter; //pulses from the hall sensor for a second
-unsigned int vehicleSpeed;
+float vehicleSpeed;
 
 unsigned short meters;
 float totalKm;
@@ -89,7 +90,7 @@ void setup() {
   meters = 0;
   hireDistance = 0;
   fare = STARTING_FARE;
-  vehicleSpeed = 0;
+  vehicleSpeed = 0.0;
   onHire = false;
   waiting = false;
   time1 = millis();
@@ -101,7 +102,7 @@ void setup() {
 //ISR 0
 void pulseCalculator(){
   ++pulseCounter;
-  ++meters;
+  meters += TYRE_SIZE;
 }
 
 void boot(){  
@@ -246,8 +247,12 @@ void showLastResetTime(){
   lcd.clear();
   
   lcd.setCursor(0, 0);
+  if(hour_LR < 10)
+    lcd.print(0);
   lcd.print(hour_LR);
   lcd.print(":");
+  if(minute_LR < 10)
+    lcd.print(0);
   lcd.print(minute_LR);
   
   lcd.setCursor(0, 1);
@@ -267,16 +272,6 @@ void reportButton(){
   }
   else{
     showMonthlyReport();
-  }
-}
-
-void odometerPressed(){
-  delay(50);
-  if(!isLongPressed(ODOMETER)){
-    showTotalDistance();
-  }
-  else{
-    clearDistance();
   }
 }
 
@@ -321,15 +316,6 @@ void showTotalDistance(){
   lcd.clear();
 }
 
-void clearDistance(){
-  saveData(2,totalKm);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Reset Suceeded!");
-  delay(2000);
-  lcd.clear();
-}
-
 void loop() {
   
   //power up taxi meter
@@ -348,7 +334,7 @@ void loop() {
   time2 = millis()-time1;
   
   if(time2 >= 1000){
-    vehicleSpeed = pulseCounter*3600/time2;
+    vehicleSpeed = pulseCounter*3600*TYRE_SIZE/time2;
     if(vehicleSpeed == 0){
       waiting = true;
       waitingClock = millis();
@@ -447,7 +433,7 @@ void loop() {
     else if(digitalRead(REPORT) == LOW)
       reportButton();
     else if(digitalRead(ODOMETER) == LOW)
-      odometerPressed();
+      showTotalDistance();
   }
   if(digitalRead(RESET) == LOW){
     if(!isLongPressed(RESET))
