@@ -23,7 +23,6 @@
 /*
  addr 0  : Total distance
  addr 1  : Total hire distance
- addr 2  : Last service kilometer
  addr 3  : Total income
  addr 4  : Day start income
  addr 5  : Day start distance
@@ -159,7 +158,7 @@ void startButton(){
 
 void endButton(){
   delay(50);
-  if(!isLongPress(END)){
+  if(!isLongPressed(END)){
     if(onHire){
       onHire = false;
       saveData(1, hireTotalKm);
@@ -205,32 +204,32 @@ void reset(){
 void resetHire(){
   menuShowTime = millis();
   
-    long day_LR,month_LR,year1_LR, year2_LR, hour_LR, minute_LR;
-    onHire = false;
-    if(RTC.read(tm)){
-      day_LR = tm.Day;
-      month_LR = tm.Month;
-      year1_LR = tmYearToCalendar(tm.Year);
-      hour_LR = tm.Hour;
-      minute_LR = tm.Minute;
-      
-      year2_LR = year1_LR % 100;
-      year1_LR /= 100; 
+  long day_LR,month_LR,year1_LR, year2_LR, hour_LR, minute_LR;
+  onHire = false;
+  if(RTC.read(tm)){
+    day_LR = tm.Day;
+    month_LR = tm.Month;
+    year1_LR = tmYearToCalendar(tm.Year);
+    hour_LR = tm.Hour;
+    minute_LR = tm.Minute;
     
-      saveData(10, day_LR);
-      saveData(11, month_LR);
-      saveData(12, year1_LR);
-      saveData(13, year2_LR);
-      saveData(14, hour_LR);
-      saveData(15, minute_LR);
-    }
+    year2_LR = year1_LR % 100;
+    year1_LR /= 100; 
+  
+    saveData(10, day_LR);
+    saveData(11, month_LR);
+    saveData(12, year1_LR);
+    saveData(13, year2_LR);
+    saveData(14, hour_LR);
+    saveData(15, minute_LR);
+  }
         
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Hire Reset");
-    lcd.setCursor(0, 1);
-    lcd.print("Complete");
-    while((millis() - menuShowTime) < 3000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Hire Reset");
+  lcd.setCursor(0, 1);
+  lcd.print("Complete");
+  while((millis() - menuShowTime) < 1000);
 }
 
 void showLastResetTime(){
@@ -263,7 +262,7 @@ void showLastResetTime(){
 
 void reportButton(){
   delay(50);
-  if(!isLongPress(REPORT)){
+  if(!isLongPressed(REPORT)){
     showDailyReport();
   }
   else{
@@ -271,9 +270,9 @@ void reportButton(){
   }
 }
 
-void serviceButton(){
+void odometerPressed(){
   delay(50);
-  if(!isLongPress(ODOMETER)){
+  if(!isLongPressed(ODOMETER)){
     showTotalDistance();
   }
   else{
@@ -332,11 +331,13 @@ void clearDistance(){
 }
 
 void loop() {
+  
+  //power up taxi meter
   while(!working){
     if(digitalRead(START) == LOW){
       digitalWrite(LCDPOWER, HIGH);
       delay(50);
-      if(isLongPress(START)){
+      if(isLongPressed(START)){
         boot();
       }
       else
@@ -391,22 +392,6 @@ void loop() {
     lcd.print("LKR      ");  
     
   }
-  
-  lcd.setCursor(0, 1);
-  
-  if(onHire && !waiting){    
-    lcd.print(vehicleSpeed);
-    lcd.print(" km/s");
-  }
-  
-  if(onHire && waiting){
-    if(millis() - waitingClock >= 30000){
-      fare += WAITING_FARE/10;
-      income += WAITING_FARE/10;
-      waitingClock = millis();
-    }
-    lcd.print("Waiting...");
-  }
   else{
     lcd.clear();
     
@@ -432,30 +417,40 @@ void loop() {
       lcd.print(tm.Minute);
       lcd.print(":");
       
-      if (tm.Second >= 0 && tm.Second < 10)
+      if (tm.Second >= 0 && tm
+      .Second < 10)
         lcd.print("0");
       lcd.print(tm.Second); 
     
       delay(200);
     }
-    else {
-      lcd.setCursor(0, 0);
-      lcd.print("Clock error!");
-      lcd.setCursor(0, 1);
-      lcd.print("Service meter");
-    }
   }
   
+  lcd.setCursor(0, 1);
+  if(onHire && waiting){
+    if(millis() - waitingClock >= 30000){
+      fare += WAITING_FARE/10;
+      income += WAITING_FARE/10;
+      waitingClock = millis();
+    }
+    lcd.print("Waiting...");
+  }
+  else{
+    lcd.print(vehicleSpeed);
+    lcd.print("km/h        ");
+  }
+  
+  //option buttons
   if(!onHire){
     if(digitalRead(START) == LOW)
       startButton();
     else if(digitalRead(REPORT) == LOW)
       reportButton();
     else if(digitalRead(ODOMETER) == LOW)
-      serviceButton();
+      odometerPressed();
   }
   if(digitalRead(RESET) == LOW){
-    if(!isLongPress(RESET))
+    if(!isLongPressed(RESET))
       reset();
     else
       showLastResetTime();
@@ -465,7 +460,7 @@ void loop() {
     endButton();
 }
 
-bool isLongPress(int pin){
+bool isLongPressed(int pin){
   longPress = 300;
   while(digitalRead(pin) == LOW){
     Serial.println(longPress);
